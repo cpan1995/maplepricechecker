@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapleDash</title>
+<script src="/static/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0c10; --panel: #13151b; --card: #181b22; --line: #262a33; --hover: #1f232c;
+    --text: #e9ebef; --muted: #9aa0aa; --faint: #6b7280;
+    --fm: #ffd75e; --deal: #ff5cf0; --profit: #5dff7a; --low: #4fd8ff; --high: #ff6b6b; --warn: #ff9f43;
+    --accent: #ff9f43;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  a { color: inherit; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 24px; padding: 12px 24px;
+           background: rgba(11,12,16,.92); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+  .logo { font-weight: 800; font-size: 18px; letter-spacing: .3px; }
+  .logo span { color: var(--accent); }
+  nav { display: flex; gap: 4px; }
+  nav a { padding: 7px 14px; border-radius: 8px; text-decoration: none; color: var(--muted); font-weight: 600; }
+  nav a:hover { background: var(--hover); color: var(--text); }
+  nav a.on { background: var(--card); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  .updated { margin-left: auto; color: var(--faint); font-size: 12px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+  h2 { font-size: 15px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); }
+  .kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .kpi b { display: block; font-size: 24px; font-weight: 700; }
+  .kpi small { color: var(--muted); }
+  section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--text); }
+  th.sorted { color: var(--accent); }
+  th.sorted::after { content: " \25B2"; font-size: 9px; }
+  th.sorted.desc::after { content: " \25BC"; }
+  input.filter { width: 260px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+                 background: var(--card); color: var(--text); font: inherit; font-size: 13px; margin: 0 0 10px; }
+  .filter-count { color: var(--faint); font-size: 12px; margin-left: 8px; }
+  th { text-align: left; color: var(--faint); font-weight: 600; font-size: 11.5px; text-transform: uppercase;
+       letter-spacing: .4px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr.click { cursor: pointer; } tr.click:hover td { background: var(--hover); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .item { display: flex; align-items: center; gap: 10px; }
+  .icon { width: 36px; height: 36px; flex: none; border-radius: 8px; background: var(--card);
+          display: grid; place-items: center; overflow: hidden; }
+  .icon img { image-rendering: pixelated; max-width: 36px; max-height: 36px; }
+  .icon .initial { color: var(--faint); font-weight: 700; font-size: 15px; }
+  .icon.big .initial { font-size: 28px; }
+  .icon.big { width: 72px; height: 72px; } .icon.big img { max-width: 72px; max-height: 72px; transform: scale(1.8); }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 11.5px; font-weight: 700; color: #0b0b0b; }
+  .t-deal { background: var(--deal); } .t-profit { background: var(--profit); } .t-high { background: var(--high); color: #fff; }
+  .t-low { background: var(--low); } .t-dim { background: #2b303b; color: var(--text); }
+  .fm { color: var(--fm); } .muted { color: var(--muted); } .faint { color: var(--faint); }
+  .good { color: var(--profit); } .bad { color: var(--high); }
+  .empty { color: var(--muted); padding: 22px; text-align: center; border: 1px dashed var(--line); border-radius: 10px; }
+  .items-layout { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+  .list { max-height: calc(100vh - 170px); overflow: auto; }
+  input.search { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line);
+                 background: var(--card); color: var(--text); font: inherit; margin-bottom: 10px; }
+  .list .row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; }
+  .list .row:hover { background: var(--hover); } .list .row.on { background: var(--card); box-shadow: inset 3px 0 0 var(--accent); }
+  .list .row .grow { flex: 1; min-width: 0; } .list .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+  .detail-head { display: flex; gap: 16px; align-items: center; margin-bottom: 14px; }
+  .detail-head h1 { font-size: 22px; margin: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 96px; }
+  .chip small { display: block; color: var(--faint); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .chip b { font-size: 16px; }
+  .chart { position: relative; height: 280px; }
+  .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; width: 90px; display: inline-block; vertical-align: middle; }
+  .bar i { display: block; height: 100%; background: var(--profit); }
+  .loc { display: inline-block; background: #24324a; color: #cfe0ff; border-radius: 6px; padding: 0 6px;
+         font-size: 11.5px; font-weight: 700; margin-right: 6px; white-space: nowrap; }
+  .btn { padding: 7px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text);
+         font: inherit; font-weight: 600; cursor: pointer; }
+  .btn:hover { background: var(--hover); } .btn:disabled { opacity: .5; cursor: default; }
+  .btn.danger { border-color: var(--high); color: var(--high); }
+  .btn.danger:hover { background: var(--high); color: #fff; }
+  .setting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  input.num { width: 90px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line);
+              background: var(--card); color: var(--text); font: inherit; }
+  .back { cursor: pointer; color: var(--muted); margin-bottom: 10px; display: inline-block; }
+  @media (max-width: 900px) { .g2, .g3, .items-layout { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Maple<span>Dash</span></div>
+  <nav>
+    <a href="#deals" data-tab="deals">Deals</a>
+    <a href="#items" data-tab="items">Items</a>
+    <a href="#market" data-tab="market">Market</a>
+    <a href="#shops" data-tab="shops">Shops</a>
+    <a href="#settings" data-tab="settings">Settings</a>
+  </nav>
+  <div class="updated" id="updated"></div>
+</header>
+<main id="main"></main>
+
+<script>
+const $main = document.getElementById("main");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function fmt(n) {
+  if (n == null) return "—";
+  const a = Math.abs(n);
+  const f = (v, s) => (Math.round(v * 10) / 10).toString().replace(/\.0$/, "") + s;
+  if (a >= 1e9) return f(n / 1e9, "b");
+  if (a >= 1e6) return f(n / 1e6, "m");
+  if (a >= 1e4) return f(n / 1e3, "k");
+  if (a < 10 && n % 1) return n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return Math.round(n).toLocaleString();
+}
+const pct = v => v == null ? "—" : `${v > 0 ? "+" : ""}${Math.round(v * 100)}%`;
+function ago(t) {
+  const s = Date.now() / 1000 - t;
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
+// Shop icons are saved as MaplePrice scans; until then, show the item's initial.
+const icon = (id, big, name = "") => `<div class="icon${big ? " big" : ""}"><span class="initial">${esc((name || "?")[0])}</span><img src="/icon/${id}.png" alt="" onload="this.previousElementSibling.remove()" onerror="this.remove()"></div>`;
+const itemCell = (d, extra = "") => `<div class="item">${icon(d.id, false, d.name)}<div><div><b>${esc(d.name)}</b></div>${extra}</div></div>`;
+const qty = q => q ? fmt(q) : '<span class="faint" title="logged before stack sizes were recorded">?</span>';
+const shopLink = d => d.shop ? `<a href="#shop/${encodeURIComponent(d.shop)}" onclick="event.stopPropagation()">${esc(d.shop)}</a>` : `<span class="faint">unknown</span>`;
+// "Ch 5 · FM 2" or "Ch 5 · Henesys Market": where to go to find this shop again.
+const loc = d => (d.channel || d.fm_room || d.map_name)
+  ? `<span class="loc">${d.channel ? "Ch " + d.channel : "Ch ?"} · ${d.fm_room ? "FM " + d.fm_room : esc(d.map_name || "Map ?")}</span>` : "";
+const whereCell = d => d.shop ? `${loc(d)}${shopLink(d)}${d.shop_title && d.shop_title !== d.shop ? `<div class="faint" style="font-size:12px">&ldquo;${esc(d.shop_title)}&rdquo;</div>` : ""}` : `<span class="faint">unknown</span>`;
+const fmCell = d => d.fm ? `<span class="fm">~${fmt(d.fm)}</span> <span class="faint">(${d.fm_reports})</span>` : `<span class="faint">no data</span>`;
+const soldTag = r => r.sold ? ' <span class="tag t-low" title="greyed out in the shop: already bought">SOLD</span>' : "";
+const empty = msg => `<div class="empty">${msg}</div>`;
+async function api(path) { const r = await fetch(path); return r.ok ? r.json() : null; }
+let charts = [];
+function chart(canvas, cfg) { const c = new Chart(canvas, cfg); charts.push(c); return c; }
+Chart.defaults.color = "#9aa0aa"; Chart.defaults.borderColor = "#262a33"; Chart.defaults.font.family = "Segoe UI, system-ui";
+
+// ---------- Deals ----------
+async function deals() {
+  const d = await api("/api/deals");
+  const under = d.under_fm.length ? `<table><tr><th>Item</th><th class="num">Asking</th><th class="num">FM</th><th data-type="num">Deal</th><th>Where</th><th>Seen</th></tr>
+    ${d.under_fm.map(r => `<tr class="click" onclick="location.hash='items/${r.id}'"><td>${itemCell(r)}</td>
+      <td class="num">${fmt(r.price)}</td><td class="num">${fmCell(r)}</td>
+      <td><span class="tag t-deal">${Math.round(r.under * 100)}% under</span></td><td>${whereCell(r)}</td><td class="muted">${ago(r.at)}</td></tr>`).join("")}</table>`
+    : empty("No listings at least 20% under FM in the last 24h. Keep scanning shops with MaplePrice.");
+  const npc = d.npc.length ? `<table><tr><th>Item</th><th class="num">Asking</th><th class="num">NPC pays</th><th class="num">Profit</th><th>Where</th><th>Seen</th></tr>
+    ${d.npc.map(r => `<tr class="click" onclick="location.hash='items/${r.id}'"><td>${itemCell(r, r.qty > 1 ? `<small class="muted">${fmt(r.qty)} for ${fmt(r.price)}</small>` : "")}</td>
+      <td class="num">${fmt(r.price)}</td><td class="num">${fmt(r.npc)}${r.qty > 1 ? " ea" : ""}</td>
+      <td class="num"><span class="tag t-profit">+${fmt(r.profit)}</span></td><td>${whereCell(r)}</td><td class="muted">${ago(r.at)}</td></tr>`).join("")}</table>`
+    : empty("Nothing listed below what an NPC pays in the last 24h.");
+  const flips = d.flips.length ? `<table><tr><th>Item</th><th class="num">Buy at or under</th><th class="num">Sells around</th><th class="num">Margin</th><th class="num">Seen</th></tr>
+    ${d.flips.map(r => `<tr class="click" onclick="location.hash='items/${r.id}'"><td>${itemCell(r)}</td>
+      <td class="num">${fmt(r.buy)}</td><td class="num">${fmt(r.sell)} <span class="faint">${esc(r.sell_basis)}</span></td>
+      <td class="num good">${pct(r.spread)}</td><td class="num muted">${r.sightings}×</td></tr>`).join("")}</table>`
+    : empty("Flip ideas need an item seen in shops at least 4 times. They'll appear as you scan more.");
+  $main.innerHTML = `
+    <section class="box"><h2>Under FM price</h2><p class="sub">Single items listed in the last 24h at least 20% below the usual Free Market price (FM prices backed by 2+ reports only). The number in brackets is how many reports the FM price is based on.</p>${under}</section>
+    <div class="grid g2">
+      <section class="box"><h2>NPC arbitrage</h2><p class="sub">Listed for less than an NPC store pays. Buy, then sell to any NPC.</p>${npc}</section>
+      <section class="box"><h2>Flip candidates</h2><p class="sub">Your cheapest-quarter price vs what it usually sells for. Buy at the first number, list near the second.</p>${flips}</section>
+    </div>`;
+}
+
+// ---------- Items ----------
+let itemQuery = "", currentItem = null;
+async function items(selected) {
+  currentItem = selected;
+  if (!document.getElementById("itemlist")) {
+    $main.innerHTML = `<div class="items-layout"><section class="box"><input class="search" id="q" placeholder="Search items you've seen…" value="${esc(itemQuery)}"><div class="list" id="itemlist"></div></section><section class="box" id="itemdetail"></section></div>`;
+    let t; document.getElementById("q").addEventListener("input", e => { itemQuery = e.target.value; clearTimeout(t); t = setTimeout(() => refreshList(currentItem), 150); });
+  }
+  await refreshList(selected);
+  if (selected) await itemDetail(selected);
+  else document.getElementById("itemdetail").innerHTML = empty("Pick an item to see its price history.");
+}
+async function refreshList(selected) {
+  const list = await api("/api/items?q=" + encodeURIComponent(itemQuery));
+  document.getElementById("itemlist").innerHTML = list.length ? list.map(r => `
+    <div class="row${r.id == selected ? " on" : ""}" onclick="location.hash='items/${r.id}'">${icon(r.id, false, r.name)}
+      <div class="grow"><div class="name">${esc(r.name)}</div><small class="muted">${r.count} listed${r.sold ? ` · <span style="color:var(--low)">${r.sold} sold</span>` : ""} · median ${fmt(r.median)} · ${ago(r.last_at)}</small></div>
+      ${r.fm ? `<small class="fm">~${fmt(r.fm)}</small>` : ""}</div>`).join("") : empty("No items yet.");
+}
+async function itemDetail(id) {
+  const d = await api("/api/item/" + id);
+  const box = document.getElementById("itemdetail");
+  if (!d) { box.innerHTML = empty("Unknown item."); return; }
+  const s = d.stats, info = d.info || {};
+  const st = info.stats || {};
+  const desc = [info.subtype, info.levelReq ? `Lv ${info.levelReq}` : "", info.reqJob || "", st.successRate ? `${st.successRate}% success` : ""].filter(Boolean).join(" · ");
+  box.innerHTML = `
+    <div class="detail-head">${icon(d.id, true, d.name)}<div><h1>${esc(d.name)}</h1><div class="muted">${esc(desc)}</div></div></div>
+    <div class="chips">
+      <div class="chip"><small>FM usual</small><b class="fm">${d.fm ? "~" + fmt(d.fm) : "—"}</b> <span class="faint">${d.fm ? d.fm_reports + " reports" : ""}</span></div>
+      <div class="chip"><small>NPC pays</small><b>${fmt(d.npc)}</b></div>
+      <div class="chip"><small>Lowest listed</small><b class="good">${fmt(s.low)}</b></div>
+      <div class="chip"><small>Median listed</small><b>${fmt(s.median)}</b></div>
+      <div class="chip"><small>Highest listed</small><b class="bad">${fmt(s.high)}</b></div>
+      <div class="chip"><small>Times listed</small><b>${s.count}</b></div>
+      <div class="chip"><small>Last sold</small><b style="color:var(--low)">${fmt(s.last_sold)}</b> <span class="faint">${s.sold ? `${s.sold} sale${s.sold > 1 ? "s" : ""} · median ${fmt(s.sold_median)}` : "none seen"}</span></div>
+    </div>
+    <div class="chart"><canvas id="pricechart"></canvas></div>
+    <h2 style="margin-top:18px">Every listing and sale</h2><p class="sub">Per-piece prices. Faded rows are prices the OCR wasn't sure about (not used in the stats). SOLD = greyed out in the shop: someone paid that, and it's kept out of the listing stats above.</p>
+    <table><tr><th>When</th><th>Where</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Each</th><th class="num">vs FM</th></tr>
+    ${d.sightings.map(r => `<tr style="${r.confirmed ? "" : "opacity:.45"}"><td class="muted">${ago(r.at)}</td><td>${whereCell(r)}</td>
+      <td class="num">${qty(r.qty)}</td><td class="num">${fmt(r.price)}${soldTag(r)}</td><td class="num">${fmt(r.unit_price)}</td>
+      <td class="num ${d.fm && r.unit_price != null && r.qty == 1 ? (r.unit_price <= d.fm ? "good" : "bad") : "faint"}">${d.fm && r.unit_price != null && r.qty == 1 ? pct(r.unit_price / d.fm - 1) : "—"}</td></tr>`).join("")}</table>`;
+  const pts = d.sightings.filter(r => r.confirmed && r.unit_price != null).map(r => ({x: r.at * 1000, y: r.unit_price, shop: r.shop, sold: r.sold}));
+  if (!pts.length) { document.querySelector(".chart").innerHTML = empty("No confirmed prices yet."); return; }
+  const xs = pts.map(p => p.x), lo = Math.min(...xs) - 3.6e6, hi = Math.max(...xs, Date.now()) + 3.6e6;
+  const line = (y, label, color) => ({type: "line", label, data: [{x: lo, y}, {x: hi, y}], borderColor: color, borderDash: [6, 5], borderWidth: 1.5, pointRadius: 0});
+  const sets = [{type: "scatter", label: "Listed at", data: pts.filter(p => !p.sold), backgroundColor: "#e9ebef", pointRadius: 4, pointHoverRadius: 6}];
+  if (pts.some(p => p.sold)) sets.push({type: "scatter", label: "Sold at", data: pts.filter(p => p.sold), backgroundColor: "#4fd8ff", pointStyle: "rectRot", pointRadius: 5, pointHoverRadius: 7});
+  if (d.fm) sets.push(line(d.fm, "FM usual", "#ffd75e"));
+  if (d.npc) sets.push(line(d.npc, "NPC pays", "#5dff7a"));
+  chart(document.getElementById("pricechart"), {data: {datasets: sets}, options: {maintainAspectRatio: false, animation: false,
+    scales: {x: {type: "linear", min: lo, max: hi, ticks: {callback: v => new Date(v).toLocaleString([], {month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"}), maxTicksLimit: 6}},
+             y: {beginAtZero: true, ticks: {callback: v => fmt(v)}}},
+    plugins: {tooltip: {callbacks: {label: c => c.raw.shop !== undefined ? `${fmt(c.raw.y)} · ${c.raw.shop || "unknown shop"} · ${new Date(c.raw.x).toLocaleString()}` : `${c.dataset.label}: ${fmt(c.raw.y)}`}}}}});
+}
+
+// ---------- Market ----------
+async function market() {
+  const d = await api("/api/overview"), k = d.kpis;
+  const kpi = (v, l) => `<div class="kpi"><b>${v}</b><small>${l}</small></div>`;
+  const moverTable = (rows, cls) => rows.length ? `<table><tr><th>Item</th><th class="num">Before</th><th class="num">Last 24h</th><th class="num">Change</th></tr>
+    ${rows.map(r => `<tr class="click" onclick="location.hash='items/${r.id}'"><td>${itemCell(r)}</td><td class="num">${fmt(r.was)}</td><td class="num">${fmt(r.now)}</td><td class="num ${cls}">${pct(r.change)}</td></tr>`).join("")}</table>`
+    : empty("Needs an item seen twice today and twice in the week before. Keep scanning.");
+  $main.innerHTML = `
+    <div class="kpis">${kpi(k.sightings_24h, "listings seen today")}${kpi(k.scans_24h, "shops scanned today")}${kpi(k.deals_now, "deals under FM today")}
+      ${kpi(k.sales_24h, "sales spotted today")}${kpi(k.items_tracked, "items tracked")}${kpi(k.shops, "shops known")}${kpi(k.sightings_total, "listings logged")}</div>
+    <section class="box"><h2>Your scanning activity</h2><p class="sub">Listings logged per hour, last 48 hours.</p><div class="chart" style="height:180px"><canvas id="activity"></canvas></div></section>
+    <section class="box"><h2>Recent sales</h2><p class="sub">Rows that were greyed out (sold) when you scanned, last 7 days. What people actually paid, not just asked.</p>
+      ${d.recent_sales.length ? `<table><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Each</th><th class="num">FM</th><th>Where</th><th>When</th></tr>
+      ${d.recent_sales.map(r => `<tr class="click" onclick="location.hash='items/${r.id}'"><td>${itemCell(r)}</td><td class="num">${qty(r.qty)}</td><td class="num">${fmt(r.price)}</td>
+        <td class="num">${fmt(r.unit_price)}</td><td class="num">${fmCell(r)}</td><td>${whereCell(r)}</td><td class="muted">${ago(r.at)}</td></tr>`).join("")}</table>` : empty("No sales spotted yet. Sold rows show up here once MaplePrice scans a shop with greyed-out items.")}</section>
+    <div class="grid g2">
+      <section class="box"><h2>Most listed this week</h2><p class="sub">What sellers are flooding the market with. Lots of supply usually means prices are soft.</p>
+        ${d.most_listed.length ? `<table><tr><th>Item</th><th class="num">Listings</th><th class="num">Lowest</th><th class="num">Median</th><th class="num">FM</th></tr>
+        ${d.most_listed.map(r => `<tr class="click" onclick="location.hash='items/${r.id}'"><td>${itemCell(r)}</td><td class="num">${r.count}</td><td class="num">${fmt(r.low)}</td><td class="num">${fmt(r.median)}</td><td class="num">${fmCell(r)}</td></tr>`).join("")}</table>` : empty("No listings yet.")}</section>
+      <div>
+        <section class="box"><h2>Getting cheaper</h2><p class="sub">Median price today vs the 6 days before.</p>${moverTable(d.fallers.filter(r => r.change < 0), "good")}</section>
+        <section class="box"><h2>Getting pricier</h2><p class="sub">Median price today vs the 6 days before.</p>${moverTable(d.risers.filter(r => r.change > 0), "bad")}</section>
+      </div>
+    </div>`;
+  chart(document.getElementById("activity"), {type: "bar", data: {labels: d.activity.map(a => new Date(a.t * 1000).toLocaleString([], {weekday: "short", hour: "2-digit"})),
+    datasets: [{data: d.activity.map(a => a.n), backgroundColor: "#ff9f43", borderRadius: 3}]},
+    options: {maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}}, scales: {x: {ticks: {maxTicksLimit: 12}}, y: {beginAtZero: true, ticks: {precision: 0}}}}});
+}
+
+// ---------- Shops ----------
+async function shops() {
+  const list = await api("/api/shops");
+  $main.innerHTML = `<section class="box"><h2>Shops you've scanned</h2><p class="sub">"Cheap" = listings at or under 90% of the FM price, among items with FM data. Click a shop for everything it listed.</p>
+    ${list.length ? `<table><tr><th>Seller</th><th>Shop title</th><th class="num">Scans</th><th class="num">Listings</th><th class="num">Sold</th><th class="num">Items</th><th data-type="num">Cheap listings</th><th class="num">Typical vs FM</th><th>Last seen</th></tr>
+    ${list.map(r => `<tr class="click" onclick="location.hash='shop/${encodeURIComponent(r.shop)}'"><td><b>${esc(r.seller || r.shop)}</b></td><td class="muted">${esc(r.title || "")}</td>
+      <td class="num">${r.scans}</td><td class="num">${r.listings}</td><td class="num">${r.sold || '<span class="faint">0</span>'}</td><td class="num">${r.items}</td>
+      <td>${r.cheap_share == null ? '<span class="faint">no FM data</span>' : `<span class="bar"><i style="width:${Math.round(r.cheap_share * 100)}%"></i></span> ${Math.round(r.cheap_share * 100)}% <span class="faint">of ${r.compared}</span>`}</td>
+      <td class="num ${r.vs_fm == null ? "faint" : r.vs_fm <= 0 ? "good" : "bad"}">${pct(r.vs_fm)}</td><td>${loc(r)}<span class="muted">${ago(r.last_at)}</span></td></tr>`).join("")}</table>`
+    : empty("No shops logged yet. Shop names are recorded from now on when you scan with MaplePrice.")}</section>`;
+}
+async function shop(name) {
+  const d = await api("/api/shop/" + encodeURIComponent(name));
+  $main.innerHTML = `<a class="back" href="#shops">← All shops</a><section class="box"><h2>${loc(d)}${esc(d.seller || d.shop)}</h2><p class="sub">${d.title ? `&ldquo;${esc(d.title)}&rdquo; · ` : ""}${d.listings.filter(r => !r.sold).length} listings · ${d.listings.filter(r => r.sold).length} sold</p>
+    <table><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">FM</th><th class="num">vs FM</th><th>Seen</th></tr>
+    ${d.listings.map(r => `<tr class="click" style="${r.confirmed ? "" : "opacity:.45"}" onclick="location.hash='items/${r.id}'"><td>${itemCell(r)}</td>
+      <td class="num">${fmt(r.qty)}</td><td class="num">${fmt(r.price)}${soldTag(r)}</td><td class="num">${r.fm ? `<span class="fm">~${fmt(r.fm)}</span>` : "—"}</td>
+      <td class="num ${r.vs_fm == null ? "faint" : r.vs_fm <= 0 ? "good" : "bad"}">${pct(r.vs_fm)}</td><td>${loc(r)}<span class="muted">${ago(r.at)}</span></td></tr>`).join("")}</table></section>`;
+}
+
+// ---------- sorting & filtering (every table) ----------
+// Click a header to sort, again to reverse. Big tables get a filter box. Both
+// are remembered per page, so the 30s auto-refresh doesn't undo them.
+const tableState = {};
+const TIME_COLUMNS = ["seen", "when", "last seen"];
+function sortValue(cell, type) {
+  const t = cell.textContent.trim();
+  if (type === "time") {
+    if (t === "just now") return 0;
+    const m = t.match(/(\d+)([mhd]) ago/);
+    return m ? +m[1] * {m: 60, h: 3600, d: 86400}[m[2]] : Infinity;  // seconds ago: smaller = newer
+  }
+  if (type === "num") {
+    const m = t.replace(/,/g, "").match(/([+-]?\d*\.?\d+)\s*([kmb])?/i);
+    if (!m) return null;
+    return parseFloat(m[1]) * ({k: 1e3, m: 1e6, b: 1e9}[(m[2] || "").toLowerCase()] || 1);
+  }
+  return t.toLowerCase();
+}
+function enhanceTables() {
+  document.querySelectorAll("main table").forEach((table, i) => {
+    const key = `${location.hash || "#deals"}|${i}`;
+    const st = tableState[key] = tableState[key] || {col: null, desc: false, filter: ""};
+    const [head, ...rows] = table.rows;
+    if (!head || !rows.length) return;
+    const heads = [...head.cells];
+    const typeOf = th => th.dataset.type || (th.classList.contains("num") ? "num"
+      : TIME_COLUMNS.includes(th.textContent.trim().toLowerCase()) ? "time" : "text");
+    const apply = () => {
+      if (st.col != null) {
+        const type = typeOf(heads[st.col]);
+        rows.sort((a, b) => {
+          const x = sortValue(a.cells[st.col], type), y = sortValue(b.cells[st.col], type);
+          if (x == null && y == null) return 0;
+          if (x == null) return 1;            // blanks always last
+          if (y == null) return -1;
+          const c = x < y ? -1 : x > y ? 1 : 0;
+          return st.desc ? -c : c;
+        });
+        rows.forEach(r => r.parentNode.appendChild(r));
+      }
+      heads.forEach((th, j) => { th.classList.toggle("sorted", j === st.col); th.classList.toggle("desc", j === st.col && st.desc); });
+      const q = st.filter.toLowerCase();
+      let shown = 0;
+      rows.forEach(r => { const hit = !q || r.textContent.toLowerCase().includes(q); r.style.display = hit ? "" : "none"; shown += hit; });
+      if (count) count.textContent = q ? `${shown} of ${rows.length}` : `${rows.length} rows`;
+    };
+    heads.forEach((th, j) => {
+      th.classList.add("sortable");
+      th.title = "Sort";
+      th.onclick = () => {
+        // numbers/times start with the "interesting" end: biggest numbers, newest first
+        if (st.col === j) st.desc = !st.desc;
+        else { st.col = j; st.desc = typeOf(th) === "num"; }
+        apply();
+      };
+    });
+    let count = null;
+    if (rows.length > 10) {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = `<input class="filter" placeholder="Filter by item, shop, channel…"><span class="filter-count"></span>`;
+      const input = wrap.querySelector("input");
+      count = wrap.querySelector(".filter-count");
+      input.value = st.filter;
+      input.oninput = () => { st.filter = input.value; apply(); };
+      table.parentNode.insertBefore(wrap, table);
+    }
+    apply();
+  });
+}
+
+// ---------- Settings ----------
+async function post(path, body) {
+  const r = await fetch(path, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(d?.error || "request failed");
+  return d;
+}
+async function settings() {
+  const d = await api("/api/settings");
+  const [lo, hi] = d.ttl_range, c = d.counts;
+  $main.innerHTML = `
+    <section class="box"><h2>Price freshness (TTL)</h2>
+      <p class="sub">How long MaplePrice trusts a cached FM price from MeowDB, and how long a price you saw in a shop counts towards the overlay's low/high. After this it fetches again. Takes effect immediately, no restart needed. Your scan history is never expired.</p>
+      <div class="setting"><input class="num" id="ttl" type="number" min="${lo}" max="${hi}" step="1" value="${+d.ttl_hours.toFixed(2)}"> hours
+        <button class="btn" id="ttl-save">Save</button> <span class="muted" id="ttl-msg"></span></div></section>
+    <section class="box"><h2>Database</h2>
+      <p class="sub">${fmt(c.scans)} scans · ${fmt(c.sightings)} listings logged · ${fmt(c.items)} items cached · ${fmt(c.market_v2)} FM prices cached</p>
+      <div class="setting"><button class="btn danger" id="clear">Clear everything</button>
+        <span class="muted" id="clear-msg">Deletes all scans, listings, shops and cached item data. Keeps the TTL setting. Can't be undone.</span></div></section>`;
+  const ttl = document.getElementById("ttl"), msg = document.getElementById("ttl-msg");
+  document.getElementById("ttl-save").onclick = async () => {
+    try { const r = await post("/api/settings", {ttl_hours: +ttl.value}); msg.className = "good"; msg.textContent = `Saved: ${+r.ttl_hours.toFixed(2)}h`; }
+    catch (e) { msg.className = "bad"; msg.textContent = e.message; }
+  };
+  document.getElementById("clear").onclick = async e => {
+    if (!confirm("Delete ALL MaplePrice data (scans, listings, shops, cached prices and icons)? This can't be undone.")) return;
+    e.target.disabled = true;
+    try { await post("/api/clear", {confirm: true}); await settings(); document.getElementById("clear-msg").textContent = "Cleared."; }
+    catch (err) { e.target.disabled = false; document.getElementById("clear-msg").textContent = err.message; }
+  };
+}
+
+// ---------- routing ----------
+let lastRoute = "";
+async function route(auto = false) {
+  const h = location.hash.slice(1) || "deals";
+  const [tab, arg] = [h.split("/")[0], decodeURIComponent(h.split("/").slice(1).join("/"))];
+  const typing = document.activeElement && (document.activeElement.id === "q" || document.activeElement.classList.contains("filter"));
+  if (auto && (typing || tab === "settings")) return;  // don't redraw while typing
+  const sameItemsView = tab === "items" && lastRoute.startsWith("items");
+  charts.forEach(c => c.destroy()); charts = [];
+  if (!sameItemsView) $main.innerHTML = "";
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.tab === (tab === "shop" ? "shops" : tab)));
+  try {
+    if (tab === "items") await items(arg || null);
+    else if (tab === "market") await market();
+    else if (tab === "shops") await shops();
+    else if (tab === "shop") await shop(arg);
+    else if (tab === "settings") await settings();
+    else await deals();
+  } catch (e) { $main.innerHTML = empty("Couldn't load data: is MapleDash still running?"); }
+  enhanceTables();
+  lastRoute = h;
+  document.getElementById("updated").textContent = "updated " + new Date().toLocaleTimeString();
+}
+window.addEventListener("hashchange", () => route());
+setInterval(() => route(true), 30000);  // live: picks up new MaplePrice scans
+route();
+</script>
+</body>
+</html>

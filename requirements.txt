@@ -1,0 +1,8 @@
+rapidocr-onnxruntime
+opencv-python
+numpy
+mss
+pillow
+rapidfuzz
+requests
+psutil
